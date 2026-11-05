@@ -1,0 +1,18 @@
+name = "todo-reminders"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Websites allowed to talk to this server (comma separated)
+ALLOWED_ORIGINS = "https://akinborodehayzed-creator.github.io,http://localhost:8080"
+# Contact for push services (Apple requires a mailto: or https: URL)
+VAPID_SUBJECT = "https://akinborodehayzed-creator.github.io/todo/"
+# VAPID_PRIVATE_KEY is a secret: set it with `npx wrangler secret put VAPID_PRIVATE_KEY`
+
+[[durable_objects.bindings]]
+name = "SCHEDULER"
+class_name = "Scheduler"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Scheduler"]

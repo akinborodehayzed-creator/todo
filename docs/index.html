@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>To Do</title>
+  <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151311" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="To Do">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div>
+        <p class="date" id="today"></p>
+        <h1>To Do</h1>
+      </div>
+      <p class="count" id="count"></p>
+    </header>
+
+    <section id="banner" class="banner" hidden></section>
+
+    <form id="add" class="add" autocomplete="off">
+      <input id="text" class="add-text" placeholder="What do you need to do?" maxlength="200" enterkeyhint="done">
+      <div class="add-row">
+        <label class="when">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+          <input id="when" type="datetime-local" aria-label="Remind me at">
+          <span id="when-label">Remind me</span>
+        </label>
+        <button class="add-btn" type="submit">Add</button>
+      </div>
+    </form>
+
+    <ul id="list" class="list"></ul>
+    <p id="empty" class="empty" hidden>Nothing to do. Enjoy it.</p>
+
+    <details id="done-wrap" class="done-wrap" hidden>
+      <summary id="done-title">Completed</summary>
+      <ul id="done-list" class="list"></ul>
+      <button id="clear-done" class="link-btn" type="button">Clear completed</button>
+    </details>
+
+    <footer class="foot">
+      <button id="test-push" class="link-btn" type="button" hidden>Send a test notification</button>
+    </footer>
+  </main>
+
+  <dialog id="edit" class="sheet">
+    <form method="dialog">
+      <h2>Edit task</h2>
+      <input id="edit-text" class="add-text" maxlength="200">
+      <label class="field">Remind me at
+        <input id="edit-when" type="datetime-local">
+      </label>
+      <div class="sheet-actions">
+        <button value="clear-reminder" class="link-btn" type="submit">Remove reminder</button>
+        <span></span>
+        <button value="cancel" class="ghost-btn" type="submit">Cancel</button>
+        <button value="save" class="add-btn" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
