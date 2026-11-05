@@ -1,10 +1,13 @@
 // Service worker: makes the app work offline and shows push notifications.
-const CACHE = 'todo-v2';
+const CACHE = 'todo-v3';
 const FILES = [
   './',
   'index.html',
   'style.css',
   'app.js',
+  'extras.js',
+  'recur.js',
+  'parse.js',
   'config.js',
   'manifest.webmanifest',
   'icons/icon-180.png',
@@ -52,16 +55,24 @@ self.addEventListener('push', (event) => {
       tag: data.tag,
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
+      data: { url: data.url || './' },
     }),
   );
 });
 
+// Opens the app on the task (or page) the notification is about
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || './', self.registration.scope).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-      for (const w of windows) if ('focus' in w) return w.focus();
-      return self.clients.openWindow('./');
+      for (const w of windows) {
+        if ('focus' in w) {
+          w.postMessage({ type: 'open', url });
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(url);
     }),
   );
 });

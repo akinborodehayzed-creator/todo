@@ -14,6 +14,17 @@ A simple to-do app for iPhone that you add to your home screen, with reminder no
 
 Tasks are saved on your phone. When you add a task with a reminder time, the app sends that one reminder to the server, which pushes the notification at the right time, even if the app is closed.
 
+## Features
+
+- **Tasks:** type plain English (`Gym tomorrow 6pm every mon and thu #health !1 @fitness`), Today / Upcoming / Inbox / lists views, overdue with "Move to today", steps, notes, priorities, tags
+- **Reminders:** repeating (daily, weekdays, custom, "after done"), snooze, "remind again" nagging until done, tapping a notification opens the task
+- **Focus:** Pomodoro timer and stopwatch with stats; notifies when a session ends
+- **Habits:** daily or chosen days, goals per day, streaks, monthly calendar, reminders
+- **Countdowns:** days until / days since, yearly birthdays and anniversaries, reminders on the day, a day or a week before
+- **Also:** undo, backup and restore (Settings), tick sound, dark mode
+
+Parser tests: `node tests/parse.test.js`
+
 ## Deploy the reminder server (one time)
 
 ```bash
