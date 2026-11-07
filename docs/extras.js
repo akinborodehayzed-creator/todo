@@ -4,7 +4,7 @@
   const core = window.TodoCore;
   const DAY = 86400000;
   const KEYS = { habits: 'todo.habits.v1', countdowns: 'todo.countdowns.v1', focus: 'todo.focus.v1', page: 'todo.page' };
-  const TITLES = { tasks: 'Tasks', focus: 'Focus', habits: 'Habits', countdowns: 'Countdown' };
+  const TITLES = { tasks: 'Tasks', focus: 'Focus', habits: 'Habits', steps: 'Steps', countdowns: 'Countdown' };
   const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const $ = (id) => document.getElementById(id);
   const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -916,6 +916,7 @@
     if (page === 'focus') renderFocus();
     if (page === 'habits') renderHabits();
     if (page === 'countdowns') renderCountdowns();
+    if (page === 'steps' && window.TodoSteps) window.TodoSteps.render();
   }
 
   for (const b of document.querySelectorAll('.bottom-nav button')) b.addEventListener('click', () => showPage(b.dataset.page));
@@ -926,6 +927,7 @@
     for (const habit of habits()) if (stale(habit)) await syncHabit(habit);
     for (const item of cdData.items) if (stale(item)) await syncCountdown(item);
     if (force) await scheduleFocusPush();
+    if (window.TodoSteps) await window.TodoSteps.syncAll(force);
   }
 
   function reload() {
@@ -937,6 +939,7 @@
       x.synced = false;
       x.serverIds = [];
     }
+    if (window.TodoSteps) window.TodoSteps.reload();
     renderPage();
     syncAll(true);
   }
@@ -962,7 +965,12 @@
     }
   }, 60000);
 
-  window.TodoExtras = { showPage, syncAll, reload };
+  window.TodoExtras = {
+    showPage, syncAll, reload,
+    get page() { return page; },
+    // shared helpers for steps.js
+    h, sheet, syncReminders, plural, dayKey, today, atTime, fromDayKey, DAY_LETTERS,
+  };
   showPage(page);
   // Push subscription is ready a moment after load
   setTimeout(() => syncAll(), 2000);

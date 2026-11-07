@@ -361,3 +361,44 @@ body:not([data-page="tasks"]) #list-menu { display: none; }
 .cd-count { flex: none; display: flex; flex-direction: column; align-items: flex-end; }
 .cd-count b { font-size: 30px; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .cd-count span { font-size: 12px; color: var(--muted); }
+
+/* Steps */
+.st-ring .ring-fg { transition: stroke-dashoffset .6s cubic-bezier(.2, .8, .2, 1); }
+.st-ring .ring-fg.met { stroke: #3fa66b; }
+.st-count { font-weight: 600; font-size: clamp(40px, 12vw, 54px); }
+.st-source { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 6px 4px 14px; font-size: 15px; min-height: 48px; }
+.st-source-text { display: flex; flex-direction: column; padding: 6px 0; }
+.st-source small { color: var(--muted); font-size: 13px; }
+.st-ring { width: min(62vw, 240px); }
+.st-chart-head { display: flex; align-items: center; justify-content: space-between; }
+.st-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.st-legend i { width: 16px; border-top: 1.5px dashed var(--muted); }
+.st-source .link-btn { min-height: 44px; padding: 0 10px; font-weight: 600; }
+.st-source.busy { opacity: .6; }
+.st-chart { margin: 4px 0 10px; }
+.st-plot { position: relative; height: 104px; display: flex; align-items: flex-end; gap: 6px; }
+.st-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+.st-col em { font-style: normal; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-fill { width: 100%; max-width: 28px; background: var(--accent-soft); border-radius: 6px; }
+.st-col.today .st-fill { background: var(--accent); }
+.st-col.met .st-fill { background: color-mix(in srgb, #3fa66b 40%, transparent); }
+.st-col.today.met .st-fill { background: #3fa66b; }
+.st-days { display: flex; gap: 6px; margin-top: 4px; }
+.st-days span { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
+.st-days span.now { color: var(--accent); font-weight: 700; }
+.st-goal-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--muted); opacity: .6; pointer-events: none; z-index: 1; }
+.st-entry-right { display: inline-flex; align-items: center; gap: 4px; }
+.st-entry-right .del { min-width: 32px; min-height: 32px; }
+.st-links { margin-top: 2px; }
+.st-links button { flex: 1; }
+.st-mode { margin: 0 auto 14px; display: flex; width: max-content; }
+.st-estimate { text-align: center; font-size: 22px; font-weight: 700; color: var(--accent); margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+.st-estimate.err { color: var(--late); font-size: 15px; }
+.st-link { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.st-guide { list-style: none; margin: 4px 0 10px; padding: 0; display: grid; gap: 10px; font-size: 15px; line-height: 1.45; }
+.st-guide li { display: flex; gap: 10px; }
+.st-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+.st-status { margin-top: 10px; }
+.st-reset { display: block; margin: 0 auto 8px; color: var(--muted); font-size: 14px; }
+.inline input[aria-label="Feet"], .inline input[aria-label="Inches"] { width: 56px; }
+.st-estimate.empty { color: var(--muted); font-size: 15px; font-weight: 500; }

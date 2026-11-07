@@ -10,7 +10,7 @@
     backup: 'todo.lastBackup',
   };
   // Saved by extras.js; included in backups
-  const EXTRA_KEYS = ['todo.habits.v1', 'todo.countdowns.v1', 'todo.focus.v1'];
+  const EXTRA_KEYS = ['todo.habits.v1', 'todo.countdowns.v1', 'todo.focus.v1', 'todo.steps.v1'];
   const DAY = 86400000;
   const $ = (id) => document.getElementById(id);
 

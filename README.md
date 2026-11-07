@@ -20,6 +20,7 @@ Tasks are saved on your phone. When you add a task with a reminder time, the app
 - **Reminders:** repeating (daily, weekdays, custom, "after done"), snooze, "remind again" nagging until done, tapping a notification opens the task
 - **Focus:** Pomodoro timer and stopwatch with stats; notifies when a session ends
 - **Habits:** daily or chosen days, goals per day, streaks, monthly calendar, reminders
+- **Steps:** daily goal ring, streaks, 7-day chart; today's count comes from Apple Health through a Shortcut (Steps → Apple Health in the app has the setup), plus treadmill sessions estimated from time and speed or distance
 - **Countdowns:** days until / days since, yearly birthdays and anniversaries, reminders on the day, a day or a week before
 - **Also:** undo, backup and restore (Settings), tick sound, dark mode
 
