@@ -432,10 +432,23 @@
   let live = null;
 
   const liveEntry = () => live && data.manual.find((m) => m.id === live.entryId);
+  // Steps a minute, from the time between your recent steps (last 30 s).
+  // 0 if there aren't enough steps yet, or you've stopped for more than 3 s.
   const liveCadence = () => {
     const now = Date.now();
-    while (live.recent.length && now - live.recent[0] > 30000) live.recent.shift();
-    return live.recent.length > 8 ? live.recent.length * 2 : 0; // steps a minute over the last 30 s
+    const r = live.recent;
+    while (r.length && now - r[0] > 30000) r.shift();
+    if (r.length < 10 || now - r[r.length - 1] > 3000) return 0;
+    const span = r[r.length - 1] - r[0];
+    if (span < 4000) return 0;
+    const cad = ((r.length - 1) / span) * 60000;
+    return cad >= 40 && cad <= 220 ? Math.round(cad) : 0;
+  };
+  const fmtAway = (ms) => {
+    const sec = Math.round(ms / 1000);
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m ? `${m} min${s ? ` ${s} s` : ''}` : `${s} s`;
   };
 
   async function keepAwake() {
@@ -541,7 +554,7 @@
     const found = live.detector.feed(a.x, a.y, a.z, e.timeStamp || performance.now());
     if (!found) return;
     const now = Date.now();
-    for (let i = 0; i < found; i++) live.recent.push(now);
+    live.recent.push(now);
     addLiveSteps(found, false);
   }
 
@@ -573,13 +586,15 @@
     live.lastTick = Date.now();
     live.hiddenAt = 0;
     if (live.hiddenCadence && away >= 0.2) {
-      const minutes = Math.min(away, MAX_AWAY_MIN);
-      const steps = Math.round(live.hiddenCadence * minutes);
-      live.activeMs += minutes * 60000;
-      live.away = { steps, minutes: Math.max(1, Math.round(minutes)) };
-      live.recent = [];
+      const ms = Math.min(away, MAX_AWAY_MIN) * 60000;
+      const steps = Math.round((live.hiddenCadence * ms) / 60000);
+      live.activeMs += ms;
+      live.away = { steps, ms, pace: live.hiddenCadence };
       addLiveSteps(steps, true);
       save();
+      render();
+    } else if (live.away) {
+      live.away = null; // an older note: it was kept
       render();
     }
   });
@@ -589,7 +604,7 @@
     if (!entry || !live.away) return;
     entry.steps = Math.max(0, entry.steps - live.away.steps);
     entry.estimated = Math.max(0, (entry.estimated || 0) - live.away.steps);
-    live.activeMs = Math.max(0, live.activeMs - live.away.minutes * 60000);
+    live.activeMs = Math.max(0, live.activeMs - live.away.ms);
     live.away = null;
     save();
     render();
@@ -649,8 +664,13 @@
       }, label)));
     const awayNote = live.away
       ? h('div', { class: 'st-away' },
-        h('span', {}, `+${fmt(live.away.steps)} steps added for the ${plural(live.away.minutes, 'minute')} you were in another app, based on your pace.`),
-        h('button', { type: 'button', class: 'link-btn', onclick: undoAway }, 'Remove'))
+        h('span', {}, `While the app was hidden for ${fmtAway(live.away.ms)}, I added `, h('b', {}, `${fmt(live.away.steps)} steps`), ` at your pace of ${live.away.pace} steps/min. Keep them if you kept walking.`),
+        h('div', { class: 'st-away-btns' },
+          h('button', { type: 'button', class: 'link-btn', onclick: () => {
+            live.away = null;
+            render();
+          } }, 'Keep'),
+          h('button', { type: 'button', class: 'link-btn muted', onclick: undoAway }, 'Remove')))
       : null;
     const block = h('div', { class: 'st-live-block' },
       els.walk, els.cheer,

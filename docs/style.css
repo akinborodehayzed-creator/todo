@@ -521,5 +521,8 @@ body[data-page="coach"] .coach-btn { background: var(--accent-soft); }
 .st-live-btns .big-btn { margin: 0; }
 .st-away { align-self: stretch; display: flex; align-items: center; gap: 10px; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 .st-away span { flex: 1; }
+.st-away-btns { display: grid; gap: 2px; }
+.st-away-btns .link-btn { min-height: 40px; }
+.st-away-btns .muted { color: var(--muted); }
 .st-live-sens { display: grid; justify-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .st-live-sens .st-mode { margin: 0; }
