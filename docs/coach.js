@@ -639,11 +639,26 @@
     return { b64: btoa(bin), seconds: decoded.duration };
   }
 
+  // A ready-made calendar so the AI never has to work out which date a weekday falls on
+  function calendarText() {
+    const rows = [];
+    for (let i = 0; i < 21; i++) {
+      const d = new Date(core.addDays(today(), i));
+      const name = d.toLocaleDateString('en-GB', { weekday: 'long' });
+      const label = i === 0 ? ' (today)' : i === 1 ? ' (tomorrow)' : '';
+      rows.push(`${name} ${core.toDateInput(d.getTime())}${label}`);
+    }
+    return rows.join('\n');
+  }
+
   function voiceSystem() {
     const lists = core.lists.map((l) => l.name);
     return [
       'You turn what the user says into tasks for their to-do app. Understand casual, messy speech in any accent.',
       `Current local date and time: ${nowText()}.`,
+      'Calendar for the next 3 weeks. ALWAYS take dates from this table, never calculate weekdays yourself:',
+      calendarText(),
+      'Weekday rules: "Monday", "on Monday", "this Monday" and "next Monday" all mean the first Monday AFTER today in the table. "Monday after next" means the second one. "This weekend" means the coming Saturday. "Next week" with no day means the coming Monday. Each task goes on the day they said for it; different tasks can have different days.',
       `Their existing lists: ${lists.length ? lists.join(', ') : 'none'}.`,
       'Return ONLY JSON in this shape:',
       '{"transcript": "what they said, cleaned up",',
@@ -831,9 +846,54 @@
       showReview();
     }
 
+    // Set a date (and optional time) from the pickers on one task or every undated one
+    function setWhen(targets, dateStr, timeStr) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      const timed = /^\d{1,2}:\d{2}$/.test(timeStr || '');
+      if (timed) {
+        const [hh, mm] = timeStr.split(':').map(Number);
+        date.setHours(hh, mm, 0, 0);
+      }
+      for (const t of targets) {
+        t.due = date.getTime();
+        t.allDay = !timed;
+        if (t.repeat) t.repeat.anchor = t.due;
+      }
+      return true;
+    }
+
+    function pickerRow(t, onSet) {
+      const dateIn = h('input', { type: 'date', class: 'field-input', min: core.toDateInput(today()), value: t && t.due != null ? core.toDateInput(t.due) : '', 'aria-label': 'Date' });
+      const timeIn = h('input', { type: 'time', class: 'field-input', value: t && t.due != null && !t.allDay ? core.toTimeInput(t.due) : '', 'aria-label': 'Time (optional)' });
+      const setBtn = h('button', {
+        type: 'button',
+        class: 'chip on',
+        onclick: () => {
+          if (!dateIn.value) {
+            dateIn.focus();
+            dateIn.showPicker?.();
+            return;
+          }
+          onSet(dateIn.value, timeIn.value);
+        },
+      }, 'Set');
+      return h('div', { class: 'voice-pick' },
+        h('label', {}, h('span', {}, 'Date'), dateIn),
+        h('label', {}, h('span', {}, 'Time (optional)'), timeIn),
+        setBtn);
+    }
+
+    let editing = -1; // which task card has its date picker open
+
     function whenText(t) {
       if (t.due == null) return 'No date';
-      const s = core.fmtDue(t.due, t.allDay);
+      const d = new Date(t.due);
+      const days = Math.round((core.startOfDay(t.due) - today()) / DAY);
+      const rel = days === 0 ? 'Today, ' : days === 1 ? 'Tomorrow, ' : '';
+      let s = rel + d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      if (!t.allDay) s += ` · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
       return t.repeat ? `${s} · ${window.Recur.describe(t.repeat)}` : s;
     }
 
@@ -860,7 +920,35 @@
                 } else showReview();
               },
             }, '×')),
-          h('div', { class: 'preview' }, ...pills.map((p) => h('span', { class: 'pill' + (p === 'No date' ? ' muted' : '') }, p))),
+          h('div', { class: 'preview' },
+            h('button', {
+              type: 'button',
+              class: 'pill pill-btn' + (t.due == null ? ' muted' : ''),
+              'aria-expanded': String(editing === i),
+              'aria-label': `Change date for ${t.text}: ${pills[0]}`,
+              onclick: () => {
+                editing = editing === i ? -1 : i;
+                showReview();
+              },
+            }, `${pills[0]} ▾`),
+            ...pills.slice(1).map((p) => h('span', { class: 'pill' }, p))),
+          editing === i ? h('div', { class: 'voice-card-pick' },
+            pickerRow(t, (date, time) => {
+              setWhen([t], date, time);
+              editing = -1;
+              if (!result.tasks.some((x2) => x2.due == null)) result.question = '';
+              showReview();
+            }),
+            t.due != null ? h('button', {
+              type: 'button',
+              class: 'link-btn',
+              onclick: () => {
+                t.due = null;
+                t.allDay = true;
+                editing = -1;
+                showReview();
+              },
+            }, 'Remove date') : null) : null,
           t.steps.length ? h('ul', { class: 'voice-steps' }, ...t.steps.map((s) => h('li', {}, s))) : null,
           why);
       });
@@ -876,6 +964,12 @@
           h('div', { class: 'chips' },
             ...[['Today', 'today 6pm'], ['Tonight', 'tonight'], ['Tomorrow', 'tomorrow 9am'], ['This weekend', 'saturday 10am'], ['Next week', 'next monday 9am'], ['No deadline', 'none']].map(([label, phrase]) =>
               h('button', { type: 'button', class: 'chip', onclick: () => quickWhen(phrase) }, label))),
+          h('p', { class: 'voice-pick-head' }, 'Or pick a date'),
+          pickerRow(null, (date, time) => {
+            setWhen(result.tasks.filter((t) => t.due == null), date, time);
+            result.question = '';
+            showReview();
+          }),
           h('form', {
             class: 'composer',
             onsubmit: (e) => {

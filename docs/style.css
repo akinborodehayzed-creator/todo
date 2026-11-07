@@ -444,6 +444,7 @@ body[data-page="coach"] .coach-btn { background: var(--accent-soft); }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: none; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; min-height: 38px; color: var(--ink); }
 .chip:disabled { opacity: .5; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .composer { display: flex; align-items: flex-end; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 5px 5px 5px 14px; }
 .composer textarea, .composer input { flex: 1; border: 0; background: none; resize: none; font-size: 16px; padding: 8px 0; outline: none; color: var(--ink); min-height: 36px; margin: 0; }
 .send-btn { flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; padding: 0; }
@@ -479,6 +480,15 @@ body[data-page="coach"] .coach-btn { background: var(--accent-soft); }
 .voice-question { align-self: stretch; background: var(--accent-soft); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
 .voice-question p { margin: 0; }
 .voice-question .chips { margin: 0 -12px; padding: 0 12px 2px; }
+.pill-btn { border: 0; font: inherit; font-size: 13px; cursor: pointer; min-height: 30px; }
+.voice-pick { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.voice-pick label { display: grid; gap: 4px; min-width: 0; }
+.voice-pick label span { font-size: 12px; font-weight: 650; color: var(--muted); }
+.voice-pick .field-input { margin: 0; min-height: 44px; padding: 8px 10px; min-width: 0; -webkit-appearance: none; appearance: none; }
+.voice-pick .chip { min-height: 44px; padding: 0 16px; }
+.voice-pick-head { font-size: 13px; font-weight: 650; color: var(--muted); }
+.voice-card-pick { display: grid; gap: 6px; margin-bottom: 10px; justify-items: start; }
+.voice-card-pick .voice-pick { width: 100%; }
 .voice .coach-go { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .voice-mic.rec, .msg.typing i, .why-card { animation: none; } }
 .composer textarea { overflow: hidden; }
