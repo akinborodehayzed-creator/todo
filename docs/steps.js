@@ -341,8 +341,8 @@
     }, 'Check connection');
     const step = (n, html) => h('li', {}, h('span', { class: 'st-num' }, String(n)), h('div', { html }));
 
-    const dialog = sheet('Apple Health', [
-      h('p', { class: 'hint' }, 'Your iPhone (and Apple Watch) already count your steps all day. A Shortcut can send that count here. One-time setup, about 5 minutes.'),
+    const dialog = sheet('All-day steps', [
+      h('p', { class: 'hint' }, 'Your iPhone counts your steps all day, even when this app is closed. A Shortcut sends that count here, so you never need to open the Health app. One-time setup, about 5 minutes.'),
       h('div', { class: 'group' },
         h('p', { class: 'group-title' }, '1. Copy your link'),
         linkBox, copy,
@@ -667,6 +667,7 @@
         } }, live.paused ? 'Resume' : 'Pause'),
         h('button', { type: 'button', class: 'big-btn st-stop', onclick: stopLive }, 'Stop walk')),
       h('p', { class: 'hint center' }, 'Steps save as you go. You can switch to another app: when you come back, the minutes you were away are filled in from your pace.'),
+      data.healthAt ? h('p', { class: 'hint center' }, 'Your iPhone may count this walk too. If today’s total jumps by about the same amount later, remove this walk from “Added today”.') : null,
       h('div', { class: 'st-live-sens' }, h('span', {}, 'Missing steps or counting too many?'), sens));
     return { block, els };
   }
@@ -700,9 +701,9 @@
     const connected = !!data.key && !!data.healthAt;
     const source = h('div', { class: 'st-source' },
       connected
-        ? h('span', { class: 'st-source-text' }, `Apple Health: ${fmt(healthOn(t))} steps`,
+        ? h('span', { class: 'st-source-text' }, `All-day steps from your iPhone: ${fmt(healthOn(t))}`,
           h('small', {}, `Updated ${dayKey(data.healthAt) === dayKey(t) ? 'today' : new Date(data.healthAt).toLocaleDateString([], { weekday: 'long' })} at ${core.fmtTime(data.healthAt)}`))
-        : h('span', { class: 'st-source-text' }, 'Apple Health isn’t connected', h('small', {}, 'Get your real step count automatically')),
+        : h('span', { class: 'st-source-text' }, 'Only live walks are counted', h('small', {}, 'Your iPhone counts every step you take. Connect once to see them all here.')),
       h('button', { type: 'button', class: 'link-btn', onclick: () => (connected ? refresh() : healthSheet()) }, connected ? 'Refresh' : 'Connect'));
 
     async function refresh() {
@@ -771,7 +772,7 @@
 
     const settingsRow = h('div', { class: 'btn-row st-links' },
       h('button', { type: 'button', class: 'ghost-btn', onclick: settingsSheet }, 'Goal & settings'),
-      h('button', { type: 'button', class: 'ghost-btn', onclick: healthSheet }, 'Apple Health'));
+      h('button', { type: 'button', class: 'ghost-btn', onclick: healthSheet }, 'iPhone steps'));
 
     page.replaceChildren(live
       ? h('div', { class: 'focus st-page' }, ring, liveEl, added)
