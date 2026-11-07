@@ -4,7 +4,7 @@
   const core = window.TodoCore;
   const DAY = 86400000;
   const KEYS = { habits: 'todo.habits.v1', countdowns: 'todo.countdowns.v1', focus: 'todo.focus.v1', page: 'todo.page' };
-  const TITLES = { tasks: 'Tasks', focus: 'Focus', habits: 'Habits', steps: 'Steps', countdowns: 'Countdown' };
+  const TITLES = { tasks: 'Tasks', focus: 'Focus', habits: 'Habits', steps: 'Steps', countdowns: 'Countdown', coach: 'Coach' };
   const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const $ = (id) => document.getElementById(id);
   const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
@@ -917,6 +917,7 @@
     if (page === 'habits') renderHabits();
     if (page === 'countdowns') renderCountdowns();
     if (page === 'steps' && window.TodoSteps) window.TodoSteps.render();
+    if (page === 'coach' && window.TodoCoach) window.TodoCoach.render();
   }
 
   for (const b of document.querySelectorAll('.bottom-nav button')) b.addEventListener('click', () => showPage(b.dataset.page));
@@ -928,6 +929,7 @@
     for (const item of cdData.items) if (stale(item)) await syncCountdown(item);
     if (force) await scheduleFocusPush();
     if (window.TodoSteps) await window.TodoSteps.syncAll(force);
+    if (window.TodoCoach) await window.TodoCoach.syncAll(force);
   }
 
   function reload() {

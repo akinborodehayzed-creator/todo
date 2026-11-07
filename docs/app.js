@@ -10,7 +10,7 @@
     backup: 'todo.lastBackup',
   };
   // Saved by extras.js; included in backups
-  const EXTRA_KEYS = ['todo.habits.v1', 'todo.countdowns.v1', 'todo.focus.v1', 'todo.steps.v1'];
+  const EXTRA_KEYS = ['todo.habits.v1', 'todo.countdowns.v1', 'todo.focus.v1', 'todo.steps.v1', 'todo.coach.v1'];
   const DAY = 86400000;
   const $ = (id) => document.getElementById(id);
 
@@ -376,7 +376,15 @@
   function commit(ids) {
     for (const id of ids) {
       const t = find(id);
-      if (t) t.synced = false;
+      if (!t) continue;
+      t.synced = false;
+      // The coach counts how often a one-off task gets pushed to a later day
+      if (!t.repeat && !t.done && t.lastDue != null && t.due != null && startOfDay(t.due) > startOfDay(t.lastDue)) {
+        t.postponed = (t.postponed || 0) + 1;
+      }
+      if (t.snoozedUntil && t.snoozedUntil !== t.lastSnooze) t.snoozes = (t.snoozes || 0) + 1;
+      t.lastSnooze = t.snoozedUntil || null;
+      t.lastDue = t.due;
     }
     save();
     render();
@@ -409,6 +417,7 @@
       li.classList.add('leaving');
       let message = 'Done';
       if (task.repeat && task.due != null) {
+        task.completions = [...(task.completions || []), Date.now()].slice(-60);
         task.due = Recur.nextAfterCompletion(task.repeat, task.due, Date.now(), task.allDay);
         if (task.repeat.after) task.repeat.anchor = task.due;
         task.subtasks.forEach((s) => (s.done = false));
@@ -635,6 +644,7 @@
       toast(`Added to ${where}`);
     }
     if (task.due != null && alertTime(task.due, task.allDay) != null) ensurePushForReminder();
+    document.dispatchEvent(new CustomEvent('todo:added', { detail: task }));
   });
 
   // ---------- edit sheet ----------
@@ -774,6 +784,7 @@
     draft = JSON.parse(JSON.stringify(editing));
     $('edit-text').value = draft.text;
     $('edit-notes').value = draft.notes || '';
+    $('edit-why').value = draft.why || '';
     $('new-step').value = '';
     renderSteps();
     $('edit-date').value = draft.due != null ? toDateInput(draft.due) : '';
@@ -809,6 +820,7 @@
     const text = $('edit-text').value.trim();
     if (text) task.text = text;
     task.notes = $('edit-notes').value.trim();
+    task.why = $('edit-why').value.trim();
     task.subtasks = draft.subtasks.filter((s) => s.text.trim());
     task.priority = draft.priority;
     task.tags = $('edit-tags').value.split(',').map((s) => s.trim().replace(/^@/, '')).filter(Boolean);
@@ -910,6 +922,7 @@
   }
 
   function notificationBody(task) {
+    if (task.why) return `Why: ${task.why}`.slice(0, 200);
     const parts = [];
     if (task.list) parts.push(listById(task.list)?.name);
     if (task.subtasks.length) parts.push(`${task.subtasks.filter((s) => s.done).length}/${task.subtasks.length} steps done`);
@@ -1144,6 +1157,36 @@
     startOfDay, addDays, fmtDay, fmtTime, fmtDue, toDateInput, toTimeInput, read, render,
     get settings() { return settings; },
     get tasks() { return tasks; },
+    get lists() { return lists; },
+    // Add a task built elsewhere (voice input)
+    addTask(fields) {
+      const list = fields.listName ? ensureList(fields.listName) : null;
+      const task = migrate({
+        id: crypto.randomUUID(),
+        text: fields.text,
+        due: fields.due ?? null,
+        allDay: fields.allDay ?? true,
+        repeat: fields.repeat || null,
+        priority: fields.priority || 0,
+        tags: fields.tags || [],
+        notes: fields.notes || '',
+        why: fields.why || '',
+        subtasks: (fields.steps || []).map((text) => ({ id: crypto.randomUUID(), text, done: false })),
+        list: list ? list.id : null,
+        createdAt: Date.now(),
+      });
+      tasks.push(task);
+      commit([task.id]);
+      if (task.due != null && alertTime(task.due, task.allDay) != null) ensurePushForReminder();
+      return task;
+    },
+    // Change one task and save it (used by the coach)
+    updateTask(id, change) {
+      const t = find(id);
+      if (!t) return;
+      change(t);
+      commit([id]);
+    },
   };
 
   // ---------- start ----------

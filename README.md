@@ -21,6 +21,8 @@ Tasks are saved on your phone. When you add a task with a reminder time, the app
 - **Focus:** Pomodoro timer and stopwatch with stats; notifies when a session ends
 - **Habits:** daily or chosen days, goals per day, streaks, monthly calendar, reminders
 - **Steps:** daily goal ring, streaks, 7-day chart; today's count comes from Apple Health through a Shortcut (Steps → Apple Health in the app has the setup), plus treadmill sessions estimated from time and speed or distance
+- **AI coach** (Coach button at the top): add your own Google Gemini key; it reads your open, finished and pushed-back tasks and the reason you gave for each, gives a Gentle / Direct / Brutal verdict, chats, and sends a morning message. The key stays on the phone.
+- **Voice tasks** (mic next to Add): say what you need to do; Gemini turns it into tasks with dates, lists, priority and steps, and asks for a deadline if you didn't give one
 - **Countdowns:** days until / days since, yearly birthdays and anniversaries, reminders on the day, a day or a week before
 - **Also:** undo, backup and restore (Settings), tick sound, dark mode
 

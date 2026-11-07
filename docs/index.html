@@ -25,6 +25,9 @@
         <button id="list-menu" class="icon-btn" type="button" aria-label="List options" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         </button>
+        <button id="open-coach" class="icon-btn coach-btn" type="button" aria-label="AI coach">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2.5 11.6 7a4 4 0 0 0 2.4 2.4l4.5 1.6-4.5 1.6a4 4 0 0 0-2.4 2.4L10 19.5 8.4 15A4 4 0 0 0 6 12.6L1.5 11 6 9.4A4 4 0 0 0 8.4 7L10 2.5Zm8.5 11 .8 2.2c.2.6.6 1 1.2 1.2l2.2.8-2.2.8c-.6.2-1 .6-1.2 1.2l-.8 2.2-.8-2.2a2 2 0 0 0-1.2-1.2l-2.2-.8 2.2-.8c.6-.2 1-.6 1.2-1.2l.8-2.2Z"/></svg>
+        </button>
         <button id="open-settings" class="icon-btn" type="button" aria-label="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a7.4 7.4 0 0 0 1.7 1l.3 2.7h4l.3-2.7a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.4L19.4 13ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
         </button>
@@ -45,7 +48,12 @@
           <input id="when" type="datetime-local" aria-label="Pick a date and time">
           <span id="when-label">Pick date</span>
         </label>
-        <button class="add-btn" type="submit">Add</button>
+        <span class="add-actions">
+          <button id="voice-add" class="mic-btn" type="button" aria-label="Add tasks by voice">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1a7 7 0 0 0 6-6.9h-2Z"/></svg>
+          </button>
+          <button class="add-btn" type="submit">Add</button>
+        </span>
       </div>
     </form>
 
@@ -62,6 +70,7 @@
     <div id="page-habits" class="page" hidden></div>
     <div id="page-steps" class="page" hidden></div>
     <div id="page-countdowns" class="page" hidden></div>
+    <div id="page-coach" class="page" hidden></div>
   </main>
 
   <nav class="bottom-nav" aria-label="Sections">
@@ -93,6 +102,8 @@
 
       <input id="edit-text" class="field-input title-input" maxlength="300" aria-label="Task">
       <textarea id="edit-notes" class="field-input" rows="2" placeholder="Notes" aria-label="Notes"></textarea>
+      <label class="why-label" for="edit-why">What do you want to achieve with this?</label>
+      <textarea id="edit-why" class="field-input" rows="2" placeholder="e.g. Land my first client and pay rent from my own business" aria-label="What do you want to achieve with this task"></textarea>
 
       <div class="group">
         <p class="group-title">Steps</p>
@@ -221,5 +232,6 @@
   <script src="app.js"></script>
   <script src="extras.js"></script>
   <script src="steps.js"></script>
+  <script src="coach.js"></script>
 </body>
 </html>

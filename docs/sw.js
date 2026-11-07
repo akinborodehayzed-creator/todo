@@ -1,5 +1,5 @@
 // Service worker: makes the app work offline and shows push notifications.
-const CACHE = 'todo-v4';
+const CACHE = 'todo-v5';
 const FILES = [
   './',
   'index.html',
@@ -7,6 +7,7 @@ const FILES = [
   'app.js',
   'extras.js',
   'steps.js',
+  'coach.js',
   'recur.js',
   'parse.js',
   'config.js',
