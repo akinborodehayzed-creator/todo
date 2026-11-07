@@ -2,7 +2,7 @@
 // It looks for the bounce of each step in the acceleration, and only starts
 // counting once it sees a steady walking rhythm, so a shake or a bump isn't a step.
 (() => {
-  const SENS = { low: 1.0, normal: 0.55, high: 0.3 }; // smallest bounce that counts, m/s²
+  const SENS = { low: 1.0, normal: 0.4, high: 0.25 }; // smallest bounce that counts, m/s²
   const MIN_GAP = 260; // ms: faster than ~3.8 steps a second isn't walking or running
   const MAX_GAP = 2000; // ms: a longer pause means you stopped
   const START_AFTER = 4; // steady steps needed before counting starts
@@ -22,6 +22,7 @@
     function feed(ax, ay, az, t) {
       if (ax == null || ay == null || az == null) return 0;
       const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+      if (!(mag > 2)) return 0; // empty or broken reading
       gravity = gravity == null ? mag : gravity + (mag - gravity) * 0.02;
       smooth += (mag - gravity - smooth) * 0.35;
       const th = Math.max(minTh, avgPeak * 0.4);

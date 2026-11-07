@@ -424,37 +424,38 @@
   // ---------- page ----------
   const RING = 2 * Math.PI * 88;
 
-  // ---------- live walk: count steps from the phone's motion sensor while the app is open ----------
+  // ---------- live walk: count steps from the phone's motion sensor, right on the Steps page ----------
+  // iPhone freezes web apps a few seconds after you switch away, so while you're in another app
+  // nothing can be measured. When you come back mid-walk, the gap is filled in from your pace.
   const CHEERS = ['Keep going!', 'Nice pace!', 'You’re moving!', 'Every step counts!', 'Look at you go!', 'Don’t stop now!'];
+  const MAX_AWAY_MIN = 90;
+  let live = null;
 
-  function saveLiveDraft(d) {
-    data.liveDraft = d;
-    save();
+  const liveEntry = () => live && data.manual.find((m) => m.id === live.entryId);
+  const liveCadence = () => {
+    const now = Date.now();
+    while (live.recent.length && now - live.recent[0] > 30000) live.recent.shift();
+    return live.recent.length > 8 ? live.recent.length * 2 : 0; // steps a minute over the last 30 s
+  };
+
+  async function keepAwake() {
+    try {
+      if (live && 'wakeLock' in navigator && !live.wakeLock && document.visibilityState === 'visible') {
+        live.wakeLock = await navigator.wakeLock.request('screen');
+        live.wakeLock.addEventListener('release', () => live && (live.wakeLock = null));
+      }
+    } catch {}
   }
 
-  // If the app was closed in the middle of a walk, keep the steps it had counted
-  function recoverLiveDraft() {
-    const d = data.liveDraft;
-    if (!d) return;
-    data.liveDraft = null;
-    save();
-    if (d.steps > 0) {
-      data.manual.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), at: d.at || Date.now(), day: d.day, steps: d.steps, kind: 'live', minutes: Math.max(1, Math.round(d.ms / 60000)) });
-      save();
-      core.toast(`Saved your last walk: ${fmt(d.steps)} steps`);
-    }
-  }
-
-  async function liveWalk() {
+  async function startLive() {
+    if (live) return;
     if (!('DeviceMotionEvent' in window)) {
       core.toast('This phone doesn’t share motion data with the app');
       return;
     }
-    // iPhone asks once for permission; it must come from a tap
     if (typeof DeviceMotionEvent.requestPermission === 'function') {
       try {
-        const state = await DeviceMotionEvent.requestPermission();
-        if (state !== 'granted') {
+        if ((await DeviceMotionEvent.requestPermission()) !== 'granted') {
           core.toast('Allow Motion & Orientation access to count steps live');
           return;
         }
@@ -463,173 +464,211 @@
         return;
       }
     }
-
-    const day = dayKey(today());
-    const startTotal = totalOn(today());
-    const detector = window.Pedometer.create(data.liveSens || 'normal');
-    let steps = 0;
-    let activeMs = 0;
-    let lastTick = Date.now();
-    let paused = false;
-    let gotMotion = false;
-    let lastMilestone = 0;
-    let wakeLock = null;
-    const recent = []; // step times for the pace
-
-    const keepAwake = async () => {
-      try {
-        if ('wakeLock' in navigator && !wakeLock && document.visibilityState === 'visible') {
-          wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', () => (wakeLock = null));
-        }
-      } catch {}
+    const entry = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), at: Date.now(), day: dayKey(today()), steps: 0, kind: 'live', minutes: 0, estimated: 0 };
+    data.manual.push(entry);
+    save();
+    live = {
+      entryId: entry.id,
+      detector: window.Pedometer.create(data.liveSens || 'normal'),
+      activeMs: 0,
+      lastTick: Date.now(),
+      paused: false,
+      gotMotion: false,
+      recent: [],
+      hiddenAt: 0,
+      hiddenCadence: 0,
+      away: null, // { steps, minutes } filled in after coming back
+      cheer: '',
+      wakeLock: null,
+      els: null,
+      dirty: false,
     };
+    window.addEventListener('devicemotion', onMotion);
+    live.tick = setInterval(onTick, 1000);
+    keepAwake();
+    core.haptic();
+    render();
+    setTimeout(() => {
+      if (live && !live.gotMotion) {
+        live.cheer = 'No motion data yet. Check Settings → Apps → Safari → Motion & Orientation Access.';
+        liveUpdate();
+      }
+    }, 3000);
+  }
 
-    // Screen
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 200 200');
-    svg.setAttribute('class', 'ring');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.innerHTML = `<circle cx="100" cy="100" r="88" class="ring-bg"/><circle cx="100" cy="100" r="88" class="ring-fg" stroke-dasharray="${RING}" stroke-dashoffset="${RING * (1 - Math.min(1, startTotal / data.goal))}" transform="rotate(-90 100 100)"/>`;
-    const arc = svg.querySelector('.ring-fg');
-    const bigNum = h('div', { class: 'ring-time st-count' });
-    const subNum = h('div', { class: 'ring-sub' });
-    const walkNum = h('div', { class: 'st-live-walk' });
-    const ring = h('div', { class: 'ring-wrap st-ring st-live-ring' }, svg,
-      h('div', { class: 'ring-text' }, h('div', { class: 'ring-label' }, 'Today'), bigNum, subNum));
-    const cheer = h('p', { class: 'st-live-cheer', 'aria-live': 'polite' });
-    const status = h('p', { class: 'st-live-status' });
-    const statTime = h('b', {}, '0:00');
-    const statPace = h('b', {}, '–');
-    const statDist = h('b', {}, fmtDistance(0));
-    const stats = h('div', { class: 'stats' },
-      h('div', { class: 'stat' }, statTime, h('span', {}, 'time')),
-      h('div', { class: 'stat' }, statPace, h('span', {}, 'steps/min')),
-      h('div', { class: 'stat' }, statDist, h('span', {}, 'distance')));
-    const sensSeg = h('div', { class: 'segmented st-mode' },
+  function stopLive() {
+    if (!live) return;
+    window.removeEventListener('devicemotion', onMotion);
+    clearInterval(live.tick);
+    live.wakeLock?.release().catch(() => {});
+    const entry = liveEntry();
+    const steps = entry ? entry.steps : 0;
+    if (entry && !steps) data.manual = data.manual.filter((m) => m !== entry);
+    live = null;
+    save();
+    syncReminder();
+    render();
+    if (steps) core.toast(`Walk saved: ${fmt(steps)} steps`);
+  }
+
+  function addLiveSteps(n, estimated) {
+    const entry = liveEntry();
+    if (!entry) return stopLive();
+    const before = totalOn(today());
+    entry.steps += n;
+    if (estimated) entry.estimated = (entry.estimated || 0) + n;
+    live.dirty = true;
+    const total = before + n;
+    if (before < data.goal && total >= data.goal) {
+      live.cheer = `🎉 ${short(data.goal)}! You hit your goal!`;
+      data.metNotified = dayKey(today());
+      core.tickSound();
+      core.haptic();
+    } else if (!estimated && Math.floor(entry.steps / 500) > Math.floor((entry.steps - n) / 500)) {
+      const left = Math.max(0, data.goal - total);
+      live.cheer = `🔥 ${fmt(Math.floor(entry.steps / 500) * 500)} steps this walk.${left ? ` ${fmt(left)} to go.` : ''} ${CHEERS[Math.floor(entry.steps / 500) % CHEERS.length]}`;
+      core.haptic();
+    }
+    liveUpdate();
+  }
+
+  function onMotion(e) {
+    if (!live) return;
+    live.gotMotion = true;
+    if (live.paused) return;
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const found = live.detector.feed(a.x, a.y, a.z, e.timeStamp || performance.now());
+    if (!found) return;
+    const now = Date.now();
+    for (let i = 0; i < found; i++) live.recent.push(now);
+    addLiveSteps(found, false);
+  }
+
+  function onTick() {
+    if (!live) return;
+    const now = Date.now();
+    if (!live.paused && document.visibilityState === 'visible' && live.detector.walking) live.activeMs += now - live.lastTick;
+    live.lastTick = now;
+    const entry = liveEntry();
+    if (entry) entry.minutes = Math.max(1, Math.round(live.activeMs / 60000));
+    if (live.dirty) {
+      live.dirty = false;
+      save(); // saved as you go, so nothing is lost if the app closes
+    }
+    liveUpdate();
+  }
+
+  // Leaving the app: remember the pace. Coming back: fill in the minutes you were away.
+  document.addEventListener('visibilitychange', () => {
+    if (!live) return;
+    if (document.visibilityState === 'hidden') {
+      live.hiddenAt = Date.now();
+      live.hiddenCadence = live.paused ? 0 : liveCadence();
+      save();
+      return;
+    }
+    keepAwake();
+    const away = live.hiddenAt ? (Date.now() - live.hiddenAt) / 60000 : 0;
+    live.lastTick = Date.now();
+    live.hiddenAt = 0;
+    if (live.hiddenCadence && away >= 0.2) {
+      const minutes = Math.min(away, MAX_AWAY_MIN);
+      const steps = Math.round(live.hiddenCadence * minutes);
+      live.activeMs += minutes * 60000;
+      live.away = { steps, minutes: Math.max(1, Math.round(minutes)) };
+      live.recent = [];
+      addLiveSteps(steps, true);
+      save();
+      render();
+    }
+  });
+
+  function undoAway() {
+    const entry = liveEntry();
+    if (!entry || !live.away) return;
+    entry.steps = Math.max(0, entry.steps - live.away.steps);
+    entry.estimated = Math.max(0, (entry.estimated || 0) - live.away.steps);
+    live.activeMs = Math.max(0, live.activeMs - live.away.minutes * 60000);
+    live.away = null;
+    save();
+    render();
+  }
+
+  // Patch the numbers in place on every step instead of redrawing the page
+  function liveUpdate() {
+    const els = live?.els;
+    if (!els || !els.count.isConnected) return;
+    const entry = liveEntry();
+    const total = totalOn(today());
+    const fraction = Math.min(1, total / data.goal);
+    els.arc.setAttribute('stroke-dashoffset', String(RING * (1 - fraction)));
+    els.arc.classList.toggle('met', fraction >= 1);
+    els.count.textContent = fmt(total);
+    const left = Math.max(0, data.goal - total);
+    els.sub.textContent = left ? `${fmt(left)} to go · goal ${short(data.goal)}` : 'Goal hit 🎉';
+    els.walk.textContent = `+${fmt(entry ? entry.steps : 0)} this walk`;
+    const sec = Math.floor(live.activeMs / 1000);
+    els.time.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    const cad = liveCadence();
+    els.pace.textContent = cad ? String(cad) : '–';
+    els.dist.textContent = fmtDistance(kmFor(entry ? entry.steps : 0));
+    els.cheer.textContent = live.cheer;
+    const walking = !live.paused && live.detector.walking;
+    els.status.textContent = live.paused
+      ? 'Paused'
+      : !live.gotMotion
+        ? 'Waiting for the motion sensor…'
+        : walking
+          ? '● Counting'
+          : entry && entry.steps
+            ? 'Stopped? Start walking and I’ll pick it up.'
+            : 'Start walking. Counting begins after a few steps.';
+    els.status.classList.toggle('on', walking);
+  }
+
+  // The live part of the Steps page
+  function liveBlock(stat) {
+    const els = {};
+    els.walk = h('div', { class: 'st-live-walk' });
+    els.cheer = h('p', { class: 'st-live-cheer', 'aria-live': 'polite' });
+    els.status = h('p', { class: 'st-live-status' });
+    els.time = h('b', {}, '0:00');
+    els.pace = h('b', {}, '–');
+    els.dist = h('b', {}, '');
+    const sens = h('div', { class: 'segmented st-mode' },
       ...[['low', 'Less'], ['normal', 'Normal'], ['high', 'More']].map(([v, label]) => h('button', {
         type: 'button',
         class: (data.liveSens || 'normal') === v ? 'on' : '',
         onclick: (e) => {
           data.liveSens = v;
           save();
-          detector.setSensitivity(v);
-          for (const b of sensSeg.children) b.classList.toggle('on', b === e.currentTarget);
+          live.detector.setSensitivity(v);
+          for (const b of sens.children) b.classList.toggle('on', b === e.currentTarget);
         },
       }, label)));
-    const pauseBtn = h('button', { type: 'button', class: 'ghost-btn', onclick: () => {
-      paused = !paused;
-      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
-      update();
-    } }, 'Pause');
-    const finishBtn = h('button', { type: 'button', class: 'big-btn', onclick: () => finish(true) }, 'Finish & save');
-
-    const dialog = h('dialog', { class: 'sheet st-live' },
-      h('div', { class: 'st-live-body' },
-        h('div', { class: 'sheet-head' }, h('span'), h('h2', {}, 'Live walk'), h('span')),
-        ring, walkNum, cheer, stats, status,
-        h('div', { class: 'btn-row' }, pauseBtn, finishBtn),
-        h('div', { class: 'st-live-sens' }, h('span', {}, 'Missing steps or counting too many?'), sensSeg),
-        h('p', { class: 'hint center' }, 'Keep this screen open while you walk. Hold your phone or keep it in your pocket. If your iPhone also counts this walk in Apple Health, remove it from “Added today” so it isn’t counted twice.')));
-
-    function update() {
-      const total = startTotal + steps;
-      const fraction = Math.min(1, total / data.goal);
-      arc.setAttribute('stroke-dashoffset', String(RING * (1 - fraction)));
-      arc.classList.toggle('met', fraction >= 1);
-      bigNum.textContent = fmt(total);
-      const left = Math.max(0, data.goal - total);
-      subNum.textContent = left ? `${fmt(left)} to go` : 'Goal hit 🎉';
-      walkNum.textContent = `+${fmt(steps)} this walk`;
-      const s = Math.floor(activeMs / 1000);
-      statTime.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-      const now = Date.now();
-      while (recent.length && now - recent[0] > 30000) recent.shift();
-      statPace.textContent = recent.length > 4 ? String(Math.round(recent.length * 2)) : '–';
-      statDist.textContent = fmtDistance(kmFor(steps));
-      status.textContent = paused
-        ? 'Paused'
-        : !gotMotion
-          ? 'Waiting for the motion sensor…'
-          : detector.walking
-            ? '● Counting'
-            : steps
-              ? 'Stopped? Start walking and I’ll pick it up.'
-              : 'Start walking. Counting begins after a few steps.';
-      status.classList.toggle('on', !paused && detector.walking);
-    }
-
-    function onMotion(e) {
-      gotMotion = true;
-      if (paused) return;
-      const a = e.accelerationIncludingGravity;
-      if (!a) return;
-      const found = detector.feed(a.x, a.y, a.z, e.timeStamp || performance.now());
-      if (!found) return;
-      steps += found;
-      const now = Date.now();
-      for (let i = 0; i < found; i++) recent.push(now);
-      // Cheer every 500 steps, and loudly at the goal
-      const total = startTotal + steps;
-      if (startTotal < data.goal && total >= data.goal && lastMilestone < data.goal) {
-        lastMilestone = data.goal;
-        cheer.textContent = `🎉 ${short(data.goal)}! You hit your goal!`;
-        core.tickSound();
-        core.haptic();
-      } else if (Math.floor(steps / 500) > Math.floor((steps - found) / 500)) {
-        const left = Math.max(0, data.goal - total);
-        cheer.textContent = `🔥 ${fmt(Math.floor(steps / 500) * 500)} steps this walk. ${left ? `${fmt(left)} to go. ` : ''}${CHEERS[Math.floor(steps / 500) % CHEERS.length]}`;
-        core.haptic();
-      }
-      update();
-    }
-
-    const tick = setInterval(() => {
-      const now = Date.now();
-      if (!paused && document.visibilityState === 'visible' && detector.walking) activeMs += now - lastTick;
-      lastTick = now;
-      update();
-      if (now % 5000 < 1000) saveLiveDraft({ day, steps, ms: activeMs, at: now });
-    }, 1000);
-
-    const onVisible = () => {
-      lastTick = Date.now();
-      if (document.visibilityState === 'visible') keepAwake();
-      else saveLiveDraft({ day, steps, ms: activeMs, at: Date.now() });
-    };
-
-    function cleanup() {
-      window.removeEventListener('devicemotion', onMotion);
-      document.removeEventListener('visibilitychange', onVisible);
-      clearInterval(tick);
-      wakeLock?.release().catch(() => {});
-    }
-
-    function finish(keep) {
-      cleanup();
-      data.liveDraft = null;
-      save();
-      dialog.close();
-      if (keep && steps > 0) {
-        addEntry({ steps, kind: 'live', minutes: Math.max(1, Math.round(activeMs / 60000)), day });
-      } else render();
-    }
-
-    // Closing with Escape/back counts as finishing; never lose steps by accident
-    dialog.addEventListener('cancel', (e) => {
-      e.preventDefault();
-      finish(true);
-    });
-    dialog.addEventListener('close', () => dialog.remove());
-    window.addEventListener('devicemotion', onMotion);
-    document.addEventListener('visibilitychange', onVisible);
-    document.body.append(dialog);
-    dialog.showModal();
-    keepAwake();
-    update();
-    setTimeout(() => {
-      if (!gotMotion && dialog.open) status.textContent = 'No motion data. Check Settings → Safari → Motion & Orientation Access.';
-    }, 3000);
+    const awayNote = live.away
+      ? h('div', { class: 'st-away' },
+        h('span', {}, `+${fmt(live.away.steps)} steps added for the ${plural(live.away.minutes, 'minute')} you were in another app, based on your pace.`),
+        h('button', { type: 'button', class: 'link-btn', onclick: undoAway }, 'Remove'))
+      : null;
+    const block = h('div', { class: 'st-live-block' },
+      els.walk, els.cheer,
+      h('div', { class: 'stats' },
+        h('div', { class: 'stat' }, els.time, h('span', {}, 'walking time')),
+        h('div', { class: 'stat' }, els.pace, h('span', {}, 'steps/min')),
+        h('div', { class: 'stat' }, els.dist, h('span', {}, 'this walk'))),
+      els.status,
+      awayNote,
+      h('div', { class: 'btn-row st-live-btns' },
+        h('button', { type: 'button', class: 'ghost-btn', onclick: () => {
+          live.paused = !live.paused;
+          render();
+        } }, live.paused ? 'Resume' : 'Pause'),
+        h('button', { type: 'button', class: 'big-btn st-stop', onclick: stopLive }, 'Stop walk')),
+      h('p', { class: 'hint center' }, 'Steps save as you go. You can switch to another app: when you come back, the minutes you were away are filled in from your pace.'),
+      h('div', { class: 'st-live-sens' }, h('span', {}, 'Missing steps or counting too many?'), sens));
+    return { block, els };
   }
 
   function render() {
@@ -645,11 +684,10 @@
     svg.setAttribute('class', 'ring');
     svg.setAttribute('aria-hidden', 'true');
     svg.innerHTML = `<circle cx="100" cy="100" r="88" class="ring-bg"/><circle cx="100" cy="100" r="88" class="ring-fg${fraction >= 1 ? ' met' : ''}" stroke-dasharray="${RING}" stroke-dashoffset="${RING * (1 - fraction)}" transform="rotate(-90 100 100)"/>`;
-    const ring = h('div', { class: 'ring-wrap st-ring', role: 'img', 'aria-label': `${fmt(total)} of ${fmt(data.goal)} steps today` }, svg,
-      h('div', { class: 'ring-text' },
-        h('div', { class: 'ring-label' }, 'Today'),
-        h('div', { class: 'ring-time st-count' }, fmt(total)),
-        h('div', { class: 'ring-sub' }, left ? `${fmt(left)} to go · goal ${short(data.goal)}` : 'Goal hit 🎉')));
+    const countEl = h('div', { class: 'ring-time st-count' }, fmt(total));
+    const subEl = h('div', { class: 'ring-sub' }, left ? `${fmt(left)} to go · goal ${short(data.goal)}` : 'Goal hit 🎉');
+    const ring = h('div', { class: 'ring-wrap st-ring' + (live ? ' live' : ''), role: 'img', 'aria-label': `${fmt(total)} of ${fmt(data.goal)} steps today` }, svg,
+      h('div', { class: 'ring-text' }, h('div', { class: 'ring-label' }, live ? 'Today · live' : 'Today'), countEl, subEl));
 
     const s = streak();
     const stat = (v, l) => h('div', { class: 'stat' }, h('b', {}, v), h('span', {}, l));
@@ -674,8 +712,16 @@
     }
 
     const buttons = h('div', { class: 'focus-btns st-btns' },
-      h('button', { type: 'button', class: 'big-btn', onclick: liveWalk }, '▶ Start live walk'),
+      h('button', { type: 'button', class: 'big-btn', onclick: startLive }, '▶ Start live walk'),
       h('button', { type: 'button', class: 'ghost-btn', onclick: addSheet }, '+ Add steps'));
+
+    // While walking, the live counter takes the place of the summary and buttons
+    let liveEl = null;
+    if (live) {
+      const lb = liveBlock(stat);
+      liveEl = lb.block;
+      live.els = { ...lb.els, count: countEl, sub: subEl, arc: svg.querySelector('.ring-fg') };
+    }
 
     // Last 7 days
     const week = Array.from({ length: 7 }, (_, i) => core.addDays(t, i - 6));
@@ -712,19 +758,25 @@
         h('p', { class: 'group-title' }, 'Added today'),
         h('ul', { class: 'sessions' }, ...entries.slice().reverse().map((m) => h('li', {},
           h('span', {}, m.kind === 'live'
-            ? `🚶 Live walk${m.minutes ? ` · ${m.minutes} min` : ''}`
+            ? `🚶 Live walk${live && live.entryId === m.id ? ' · now' : m.minutes ? ` · ${m.minutes} min` : ''}${m.estimated ? ` · ${fmt(m.estimated)} estimated` : ''}`
             : m.kind === 'treadmill'
             ? `🏃 Treadmill${m.minutes ? ` · ${m.minutes} min` : ''}${m.distanceKm ? ` · ${fmtDistance(m.distanceKm)}` : ''}`
             : '👟 Steps added'),
           h('span', { class: 'st-entry-right' }, fmt(m.steps),
-            h('button', { type: 'button', class: 'del', 'aria-label': 'Remove entry', onclick: () => removeEntry(m.id) }, '×'))))))
+            h('button', { type: 'button', class: 'del', 'aria-label': 'Remove entry', onclick: () => {
+              if (live && live.entryId === m.id) stopLive();
+              removeEntry(m.id);
+            } }, '×'))))))
       : null;
 
     const settingsRow = h('div', { class: 'btn-row st-links' },
       h('button', { type: 'button', class: 'ghost-btn', onclick: settingsSheet }, 'Goal & settings'),
       h('button', { type: 'button', class: 'ghost-btn', onclick: healthSheet }, 'Apple Health'));
 
-    page.replaceChildren(h('div', { class: 'focus st-page' }, ring, stats, source, buttons, weekCard, added, settingsRow));
+    page.replaceChildren(live
+      ? h('div', { class: 'focus st-page' }, ring, liveEl, added)
+      : h('div', { class: 'focus st-page' }, ring, stats, source, buttons, weekCard, added, settingsRow));
+    if (live) liveUpdate();
   }
 
   function reload() {
@@ -736,7 +788,13 @@
 
   window.TodoSteps = { render, syncAll, reload };
 
-  recoverLiveDraft();
+  // An older version kept unfinished walks here
+  if (data.liveDraft) {
+    const d = data.liveDraft;
+    if (d.steps > 0) data.manual.push({ id: String(Date.now()), at: d.at || Date.now(), day: d.day, steps: d.steps, kind: 'live', minutes: Math.max(1, Math.round(d.ms / 60000)) });
+    data.liveDraft = null;
+    save();
+  }
   if (x.page === 'steps') render();
   // Fetch the latest Health count whenever the app comes back to the front
   document.addEventListener('visibilitychange', async () => {
