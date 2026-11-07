@@ -507,3 +507,19 @@ body[data-page="coach"] .coach-btn { background: var(--accent-soft); }
 .voice .coach-go { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .voice-mic.rec, .msg.typing i, .why-card { animation: none; } }
 .composer textarea { overflow: hidden; }
+
+/* Live walk */
+.st-btns { display: grid; gap: 10px; }
+.st-live { max-height: 100dvh; }
+.st-live-body { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 8px; }
+.st-live-body .sheet-head { align-self: stretch; }
+.st-live-ring { width: min(64vw, 250px); }
+.st-live-walk { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.st-live-cheer { min-height: 1.4em; margin: 0; font-weight: 650; text-align: center; }
+.st-live-body .stats { align-self: stretch; }
+.st-live-status { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
+.st-live-status.on { color: var(--accent); font-weight: 650; }
+.st-live-body .btn-row { align-self: stretch; display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.st-live-body .btn-row .big-btn { margin: 0; }
+.st-live-sens { display: grid; justify-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.st-live-sens .st-mode { margin: 0; }
