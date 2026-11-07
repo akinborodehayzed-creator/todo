@@ -392,6 +392,21 @@ body:not([data-page="tasks"]) #list-menu { display: none; }
 .st-links { margin-top: 2px; }
 .st-links button { flex: 1; }
 .st-mode { margin: 0 auto 14px; display: flex; width: max-content; }
+.st-big-input { display: block; width: 100%; border: 0; background: none; text-align: center; font-size: 52px; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; outline: none; padding: 6px 0 0; -moz-appearance: textfield; }
+.st-big-input::-webkit-inner-spin-button, .st-big-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.st-big-input::placeholder { color: var(--line); }
+.st-quick { justify-content: center; margin: 0 0 16px !important; padding-bottom: 2px; }
+.st-big-input + .st-estimate { margin-top: 0; }
+.st-tread-toggle { display: block; margin: 0 auto 10px; min-height: 44px; }
+.st-tread { display: grid; gap: 12px; }
+.st-field { display: grid; gap: 6px; }
+.st-field > span { font-size: 13px; font-weight: 650; color: var(--muted); }
+.st-field .field-input { margin: 0; min-height: 44px; }
+.st-paces { flex-wrap: wrap; }
+.st-paces .chip { display: grid; justify-items: center; line-height: 1.2; padding: 6px 12px; min-height: 48px; }
+.st-paces .chip span { font-size: 12px; font-weight: 500; opacity: .8; }
+.st-more summary { font-size: 14px; color: var(--accent); font-weight: 600; cursor: pointer; min-height: 32px; }
+.st-more[open] summary { margin-bottom: 8px; }
 .st-estimate { text-align: center; font-size: 22px; font-weight: 700; color: var(--accent); margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
 .st-estimate.err { color: var(--late); font-size: 15px; }
 .st-link { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

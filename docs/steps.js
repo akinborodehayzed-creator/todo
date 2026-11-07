@@ -185,70 +185,119 @@
     return { input, row: h('label', { class: 'row' }, label, input) };
   }
 
+  // Add steps: one number is all you need. The treadmill helper is optional and fills it in for you.
+  const PACES = [
+    ['Easy walk', 4.5], ['Walk', 5.5], ['Brisk walk', 6.5], ['Jog', 8], ['Run', 10],
+  ];
   function addSheet() {
-    let mode = 'treadmill';
-    const speedUnit = data.imperial ? 'mph' : 'km/h';
+    let day = 'today';
+    let paceKmh = data.lastPace || 5.5;
+    let fromTreadmill = null; // the estimate currently in the box, if any
     const distUnit = data.imperial ? 'mi' : 'km';
-    const minutes = numberField('Minutes', { placeholder: '30', max: '600' });
-    const speed = numberField(`Speed, ${speedUnit}`, { placeholder: data.imperial ? '3.5' : '5.5', max: '30' });
-    const dist = numberField(`Distance, ${distUnit}`, { placeholder: data.imperial ? '1.5' : '2.5', max: '100' });
-    const count = numberField('Steps', { placeholder: '2500', inputmode: 'numeric', max: '100000' });
-    const estimate = h('p', { class: 'st-estimate', 'aria-live': 'polite' });
-    const treadmillBox = h('div', { class: 'group' }, minutes.row, speed.row, dist.row,
-      h('p', { class: 'hint' }, 'Fill in time and speed, or just the distance the treadmill shows. Only add sessions your phone or Watch didn’t already count.'));
-    const countBox = h('div', { class: 'group', hidden: true }, count.row,
-      h('p', { class: 'hint' }, 'For steps from another tracker, or if you don’t use Apple Health.'));
-
     const toKm = (v) => (data.imperial ? v * 1.609 : v);
-    function calc() {
-      if (mode === 'manual') {
-        const n = Number(count.input.value);
-        return n > 0 ? { steps: n, kind: 'manual' } : null;
-      }
-      const mins = Number(minutes.input.value) || 0;
-      let kmh = Number(speed.input.value) ? toKm(Number(speed.input.value)) : null;
-      let km = Number(dist.input.value) ? toKm(Number(dist.input.value)) : null;
-      if (km == null && kmh && mins) km = (kmh * mins) / 60;
-      if (kmh == null && km && mins) kmh = km / (mins / 60);
-      if (!km) return null;
-      return { steps: (km * 1000) / strideM(kmh), kind: 'treadmill', minutes: mins || null, speed: kmh, distanceKm: km };
-    }
-    function update() {
-      const r = calc();
-      estimate.classList.toggle('empty', !r);
-      estimate.classList.remove('err');
-      estimate.textContent = r ? `≈ ${fmt(r.steps)} steps${r.kind === 'treadmill' ? ` · ${fmtDistance(r.distanceKm)}` : ''}` : mode === 'manual' ? 'Enter a step count' : 'Enter time and speed, or distance';
-    }
-    for (const f of [minutes, speed, dist, count]) f.input.addEventListener('input', update);
+    const paceLabel = (kmh) => (data.imperial ? `${(kmh / 1.609).toFixed(1)} mph` : `${kmh} km/h`);
 
-    const seg = h('div', { class: 'segmented wide st-mode' },
-      ...[['treadmill', 'Treadmill'], ['manual', 'Step count']].map(([m, label]) => h('button', {
+    const count = h('input', { type: 'number', inputmode: 'numeric', min: '1', max: '100000', placeholder: '0', class: 'st-big-input', 'aria-label': 'Steps' });
+    const hint = h('p', { class: 'st-estimate empty', 'aria-live': 'polite' }, 'How many steps?');
+    const showHint = (text, kind) => {
+      hint.textContent = text;
+      hint.className = 'st-estimate' + (kind ? ` ${kind}` : '');
+    };
+    count.addEventListener('input', () => {
+      fromTreadmill = null;
+      showHint(Number(count.value) > 0 ? `${fmt(Number(count.value))} steps` : 'How many steps?', Number(count.value) > 0 ? '' : 'empty');
+    });
+
+    const quick = h('div', { class: 'chips st-quick' },
+      ...[1000, 2500, 5000].map((n) => h('button', {
         type: 'button',
-        class: m === mode ? 'on' : '',
+        class: 'chip',
+        onclick: () => {
+          count.value = String((Number(count.value) || 0) + n);
+          count.dispatchEvent(new Event('input'));
+        },
+      }, `+${fmt(n)}`)));
+
+    const daySeg = h('div', { class: 'segmented st-mode' },
+      ...[['today', 'Today'], ['yesterday', 'Yesterday']].map(([d, label]) => h('button', {
+        type: 'button',
+        class: d === day ? 'on' : '',
         onclick: (e) => {
-          mode = m;
-          for (const b of seg.children) b.classList.toggle('on', b === e.currentTarget);
-          treadmillBox.hidden = m !== 'treadmill';
-          countBox.hidden = m !== 'manual';
-          update();
-          (m === 'manual' ? count : minutes).input.focus();
+          day = d;
+          for (const b of daySeg.children) b.classList.toggle('on', b === e.currentTarget);
         },
       }, label)));
-    update();
-    sheet('Add steps', [seg, treadmillBox, countBox, estimate], {
+
+    // Optional treadmill helper
+    const minutes = h('input', { type: 'number', inputmode: 'numeric', min: '1', max: '600', placeholder: '30', class: 'field-input', 'aria-label': 'Minutes on the treadmill' });
+    const dist = h('input', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', max: '100', placeholder: data.imperial ? '1.5' : '2.5', class: 'field-input', 'aria-label': `Distance in ${distUnit}` });
+    const paces = h('div', { class: 'chips st-paces' },
+      ...PACES.map(([label, kmh]) => h('button', {
+        type: 'button',
+        class: 'chip' + (kmh === paceKmh ? ' on' : ''),
+        'aria-pressed': String(kmh === paceKmh),
+        onclick: (e) => {
+          paceKmh = kmh;
+          for (const b of paces.children) {
+            b.classList.toggle('on', b === e.currentTarget);
+            b.setAttribute('aria-pressed', String(b === e.currentTarget));
+          }
+          estimate();
+        },
+      }, h('b', {}, label), h('span', {}, paceLabel(kmh)))));
+
+    function estimate() {
+      const mins = Number(minutes.value) || 0;
+      const km = Number(dist.value) ? toKm(Number(dist.value)) : mins ? (paceKmh * mins) / 60 : 0;
+      if (!km) return;
+      const kmh = Number(dist.value) && mins ? km / (mins / 60) : paceKmh;
+      const steps = Math.round((km * 1000) / strideM(kmh));
+      fromTreadmill = { steps, kind: 'treadmill', minutes: mins || null, speed: kmh, distanceKm: km };
+      count.value = String(steps);
+      showHint(`≈ ${fmt(steps)} steps · ${fmtDistance(km)}`);
+    }
+    minutes.addEventListener('input', estimate);
+    dist.addEventListener('input', estimate);
+
+    const treadBox = h('div', { class: 'group st-tread', hidden: true },
+      h('label', { class: 'st-field' }, h('span', {}, 'How many minutes?'), minutes),
+      h('div', { class: 'st-field' }, h('span', {}, 'How fast?'), paces),
+      h('details', { class: 'st-more' },
+        h('summary', {}, 'Treadmill shows the distance?'),
+        h('label', { class: 'st-field' }, h('span', {}, `Distance, ${distUnit}`), dist)),
+      h('p', { class: 'hint' }, 'Only add walks your phone or Watch didn’t count, like when your phone was on the treadmill’s stand.'));
+    const treadToggle = h('button', {
+      type: 'button',
+      class: 'link-btn st-tread-toggle',
+      'aria-expanded': 'false',
+      onclick: () => {
+        treadBox.hidden = !treadBox.hidden;
+        treadToggle.setAttribute('aria-expanded', String(!treadBox.hidden));
+        treadToggle.textContent = treadBox.hidden ? 'On a treadmill? Work out my steps' : 'Hide treadmill helper';
+        if (!treadBox.hidden) minutes.focus();
+      },
+    }, 'On a treadmill? Work out my steps');
+
+    sheet('Add steps', [count, hint, quick, daySeg, treadToggle, treadBox], {
       saveLabel: 'Add',
       onSave: () => {
-        const r = calc();
-        if (!r || r.steps < 1) {
-          estimate.textContent = mode === 'manual' ? 'Enter a step count' : 'Enter time and speed, or distance';
-          estimate.classList.add('err');
+        const n = Math.round(Number(count.value));
+        if (!(n > 0)) {
+          showHint('Enter how many steps', 'err');
+          count.focus();
           return false;
         }
-        addEntry(r);
+        const entry = fromTreadmill && fromTreadmill.steps === n ? fromTreadmill : { steps: n, kind: 'manual' };
+        if (fromTreadmill) {
+          data.lastPace = paceKmh;
+          save();
+        }
+        if (day === 'yesterday') entry.day = dayKey(core.addDays(today(), -1));
+        addEntry(entry);
         return true;
       },
     });
-    setTimeout(() => minutes.input.focus(), 50);
+    setTimeout(() => count.focus(), 50);
   }
 
   // ---------- connect Apple Health ----------
