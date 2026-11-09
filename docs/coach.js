@@ -659,13 +659,14 @@
       'Calendar for the next 3 weeks. ALWAYS take dates from this table, never calculate weekdays yourself:',
       calendarText(),
       'Weekday rules: "Monday", "on Monday", "this Monday" and "next Monday" all mean the first Monday AFTER today in the table. "Monday after next" means the second one. "This weekend" means the coming Saturday. "Next week" with no day means the coming Monday. Each task goes on the day they said for it; different tasks can have different days.',
-      `Their existing lists: ${lists.length ? lists.join(', ') : 'none'}.`,
+      `GROUPS (their task lists): ${lists.length ? lists.join(', ') : 'none'}.`,
+      'Put EVERY task in the group it fits best. Family = spouse, children, parents, relatives, home and household jobs, family events. Work = their job or business: clients, meetings, colleagues, reports, invoices, emails, projects. Personal goals = their own growth: health, fitness, steps, gym, learning, reading, study, faith, money and savings goals, habits, hobbies. If they say a group by name ("for work", "family stuff"), use it. Only leave it empty if it truly fits none.',
       'Return ONLY JSON in this shape:',
       '{"transcript": "what they said, cleaned up",',
       ' "tasks": [{"title": "short clear task title, max 80 chars, starts with a verb when natural",',
       '   "date": "YYYY-MM-DD or empty", "time": "HH:MM 24-hour or empty",',
       '   "repeat": "empty, or one of: every day | weekdays | every week | every 2 weeks | every month | every year | every mon and thu (any days) | every 3 days",',
-      '   "list": "an existing list name if it clearly fits, a new short name only if they named one, else empty",',
+      '   "list": "the group this task belongs to: exactly one of their existing groups (see GROUPS above), or a new short name only if they named a group that does not exist",',
       '   "priority": 0-3 (3 = urgent/important, 0 = not said),',
       '   "why": "what they want to achieve with it, if they said, else empty",',
       '   "steps": ["sub-steps if they listed parts of one task"],',
@@ -887,6 +888,24 @@
 
     let editing = -1; // which task card has its date picker open
 
+    // Which group (Family, Work, ...) a task goes in; tap to change
+    function groupPicker(t) {
+      const known = core.lists.find((l) => l.name.toLowerCase() === (t.listName || '').toLowerCase());
+      const sel = h('select', {
+        class: 'pill pill-select' + (t.listName ? '' : ' muted'),
+        'aria-label': `Group for ${t.text}`,
+        onchange: (e) => {
+          t.listName = e.target.value || null;
+          showReview();
+        },
+      },
+      h('option', { value: '' }, 'No group'),
+      ...core.lists.map((l) => h('option', { value: l.name }, core.listLabel(l))),
+      t.listName && !known ? h('option', { value: t.listName }, `${t.listName} (new)`) : null);
+      sel.value = known ? known.name : t.listName || '';
+      return sel;
+    }
+
     function whenText(t) {
       if (t.due == null) return 'No date';
       const d = new Date(t.due);
@@ -901,7 +920,6 @@
       const cards = result.tasks.map((t, i) => {
         const title = h('input', { class: 'voice-task-title', value: t.text, maxlength: '300', 'aria-label': 'Task title', oninput: (e) => (t.text = e.target.value) });
         const pills = [whenText(t)];
-        if (t.listName) pills.push(`#${t.listName}`);
         if (t.priority) pills.push(['', 'Low', 'Medium', 'High'][t.priority]);
         if (t.steps.length) pills.push(`${t.steps.length} steps`);
         const why = h('input', { class: 'field-input voice-why', value: t.why, placeholder: 'What do you want to achieve with this?', maxlength: '200', oninput: (e) => (t.why = e.target.value) });
@@ -931,6 +949,7 @@
                 showReview();
               },
             }, `${pills[0]} ▾`),
+            groupPicker(t),
             ...pills.slice(1).map((p) => h('span', { class: 'pill' }, p))),
           editing === i ? h('div', { class: 'voice-card-pick' },
             pickerRow(t, (date, time) => {

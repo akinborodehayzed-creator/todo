@@ -48,6 +48,41 @@
   let view = localStorage.getItem(KEYS.view) || 'today';
   let registration = null;
 
+  // ---------- groups (lists) ----------
+  // Every task can belong to one group. Three are made for you; you can add, rename or delete them.
+  const DEFAULT_GROUPS = [['Family', '🏠'], ['Work', '💼'], ['Personal goals', '🎯']];
+  if (!settings.groupsSeeded) {
+    for (const [name, icon] of DEFAULT_GROUPS) {
+      const l = ensureList(name);
+      if (!l.icon) l.icon = icon;
+    }
+    settings.groupsSeeded = true;
+    save();
+  }
+  const listLabel = (l) => (l.icon ? `${l.icon} ${l.name}` : l.name);
+
+  // A quick guess at the group from the words in a typed task (voice uses the AI instead)
+  const GROUP_WORDS = {
+    Family: /\b(mum|mom|mother|dad|father|wife|husband|kids?|son|daughter|child(ren)?|baby|family|brother|sister|siblings?|parents?|uncle|aunt(ie)?|cousin|grand(ma|pa|mother|father)|in-?laws?|home|house|groceries|school run|nanny|birthday|anniversary)\b/gi,
+    Work: /\b(clients?|customers?|meeting|invoices?|reports?|boss|manager|office|projects?|proposal|presentation|team|colleagues?|work|job|contract|payroll|deadline|deck|pitch|sales|emails?|slack|zoom|interview)\b/gi,
+    'Personal goals': /\b(gym|workout|exercise|run(ning)?|walk|steps|read(ing)?|books?|study|learn(ing)?|course|meditat\w*|diet|weight|save money|savings|budget|goal|practi[cs]e|journal|habit|sleep|bible|pray(er)?|skills?)\b/gi,
+  };
+  function guessGroup(text) {
+    let best = null;
+    let bestN = 0;
+    let tie = false;
+    for (const [name, re] of Object.entries(GROUP_WORDS)) {
+      if (!lists.some((l) => l.name.toLowerCase() === name.toLowerCase())) continue;
+      const n = (String(text).match(re) || []).length;
+      if (n > bestN) {
+        best = name;
+        bestN = n;
+        tie = false;
+      } else if (n && n === bestN) tie = true;
+    }
+    return tie ? null : best;
+  }
+
   function save() {
     localStorage.setItem(KEYS.tasks, JSON.stringify(tasks));
     localStorage.setItem(KEYS.lists, JSON.stringify(lists));
@@ -104,8 +139,8 @@
     return [
       { id: 'today', name: 'Today' },
       { id: 'upcoming', name: 'Upcoming' },
+      ...lists.map((l) => ({ id: `list:${l.id}`, name: listLabel(l) })),
       { id: 'inbox', name: 'Inbox' },
-      ...lists.map((l) => ({ id: `list:${l.id}`, name: l.name })),
       { id: 'all', name: 'All' },
     ];
   }
@@ -126,6 +161,19 @@
     return (b.priority || 0) - (a.priority || 0) || a.createdAt - b.createdAt;
   }
 
+  // Split tasks into one section per group (only when they come from more than one group)
+  function byGroup(items, extra = {}) {
+    const ids = [...new Set(items.map((t) => (listById(t.list) ? t.list : null)))];
+    if (ids.length < 2) return [{ ...extra, tasks: items }];
+    const order = [...lists.map((l) => l.id), null];
+    ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    return ids.map((id) => ({
+      title: id ? listLabel(listById(id)) : 'No group',
+      grouped: true,
+      tasks: items.filter((t) => (listById(t.list) ? t.list : null) === id),
+    }));
+  }
+
   function sections() {
     const open = active().filter((t) => inView(t, view)).sort(byDue);
     const today = startOfDay(Date.now());
@@ -134,8 +182,9 @@
 
     if (view === 'today') {
       const due = open.filter((t) => t.due >= today);
-      if (!overdue.length) return [{ tasks: due }];
-      return [{ title: 'Overdue', late: true, tasks: overdue, action: moveAll }, { title: 'Today', tasks: due }];
+      const groups = byGroup(due, overdue.length ? { title: 'Today' } : {});
+      if (!overdue.length) return groups;
+      return [{ title: 'Overdue', late: true, tasks: overdue, action: moveAll }, ...groups];
     }
     if (view === 'upcoming') {
       const out = overdue.length ? [{ title: 'Overdue', late: true, tasks: overdue, action: moveAll }] : [];
@@ -151,6 +200,7 @@
       if (later.length) out.push({ title: 'Later', tasks: later });
       return out;
     }
+    if (view === 'all') return byGroup(open);
     return [{ tasks: open }];
   }
 
@@ -178,7 +228,7 @@
     return el;
   }
 
-  function renderItem(task) {
+  function renderItem(task, hideGroup = false) {
     const li = document.createElement('li');
     li.className = 'item' + (task.done ? ' done' : '');
     li.dataset.p = task.priority || 0;
@@ -208,7 +258,10 @@
     }
     if (task.repeat) meta.append(span('', `↻ ${Recur.describe(task.repeat)}`));
     if (task.nag) meta.append(span('', '🔁 Nag'));
-    if (task.list && !view.startsWith('list:')) meta.append(span('', `☰ ${listById(task.list)?.name || 'List'}`));
+    if (task.list && !view.startsWith('list:') && hideGroup !== true) {
+      const l = listById(task.list);
+      meta.append(span('group', l ? listLabel(l) : 'List'));
+    }
     if (task.subtasks.length) meta.append(span('', `☑ ${task.subtasks.filter((s) => s.done).length}/${task.subtasks.length}`));
     if (task.notes) meta.append(span('', '✎ Note'));
     for (const tag of task.tags) meta.append(span('tag', `@${tag}`));
@@ -241,7 +294,7 @@
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'tab new';
-    add.textContent = '+ List';
+    add.textContent = '+ Group';
     add.onclick = newList;
     nav.replaceChildren(...buttons, add);
     nav.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -282,7 +335,7 @@
       }
       const ul = document.createElement('ul');
       ul.className = 'list';
-      ul.append(...s.tasks.map(renderItem));
+      ul.append(...s.tasks.map((t) => renderItem(t, !!s.grouped)));
       wrap.append(ul);
       parts.push(wrap);
     }
@@ -479,7 +532,7 @@
   }
 
   function newList() {
-    const name = prompt('New list name');
+    const name = prompt('New group name (e.g. Church, Side business)');
     if (!name || !name.trim()) return;
     const list = ensureList(name);
     save();
@@ -491,9 +544,19 @@
     if (!list) return;
     actionSheet(list.name, [
       {
-        label: 'Rename list',
+        label: 'Change icon',
         run: () => {
-          const name = prompt('Rename list', list.name);
+          const icon = prompt('Type or paste one emoji for this group', list.icon || '');
+          if (icon == null) return;
+          list.icon = [...icon.trim()].slice(0, 2).join('');
+          save();
+          render();
+        },
+      },
+      {
+        label: 'Rename group',
+        run: () => {
+          const name = prompt('Rename group', list.name);
           if (name && name.trim()) {
             list.name = name.trim();
             save();
@@ -502,7 +565,7 @@
         },
       },
       {
-        label: 'Delete list',
+        label: 'Delete group',
         danger: true,
         run: () => {
           const count = tasks.filter((t) => t.list === list.id).length;
@@ -513,7 +576,7 @@
           lists = lists.filter((l) => l !== list);
           setView('inbox');
           commit(moved.map((t) => t.id));
-          toast('List deleted', () => {
+          toast('Group deleted', () => {
             restore(before, moved.map((t) => t.id));
             setView(`list:${list.id}`);
           });
@@ -582,6 +645,10 @@
     if (task.due == null && view === 'today') task.due = startOfDay(Date.now());
     if (task.due == null && view === 'upcoming') task.due = addDays(startOfDay(Date.now()), 1);
     if (!task.listName && view.startsWith('list:')) task.listName = listById(view.slice(5))?.name;
+    if (!task.listName) {
+      task.listName = guessGroup(task.text);
+      task.autoGroup = !!task.listName;
+    }
     return task;
   }
 
@@ -594,7 +661,8 @@
       if (parsed.repeat) pills.push(pill(`↻ ${Recur.describe(parsed.repeat)}`));
       if (parsed.listName && !(view.startsWith('list:') && listById(view.slice(5))?.name === parsed.listName)) {
         const exists = lists.some((l) => l.name.toLowerCase() === parsed.listName.toLowerCase());
-        pills.push(pill(`☰ ${parsed.listName}${exists ? '' : ' (new list)'}`));
+        const l = lists.find((x) => x.name.toLowerCase() === parsed.listName.toLowerCase());
+        pills.push(pill(`${l ? listLabel(l) : `☰ ${parsed.listName}`}${exists ? '' : ' (new list)'}${parsed.autoGroup ? ' · auto' : ''}`));
       }
       if (parsed.priority) pills.push(pill(['', 'Low', 'Medium', 'High'][parsed.priority] + ' priority'));
       for (const tag of parsed.tags) pills.push(pill(`@${tag}`));
@@ -723,7 +791,7 @@
 
   function fillListSelect(selected) {
     const sel = $('edit-list');
-    const opts = [['', 'Inbox'], ...lists.map((l) => [l.id, l.name]), ['__new', '+ New list…']];
+    const opts = [['', 'No group (Inbox)'], ...lists.map((l) => [l.id, listLabel(l)]), ['__new', '+ New group…']];
     sel.replaceChildren(...opts.map(([value, label]) => new Option(label, value, false, value === (selected || ''))));
   }
   $('edit-list').addEventListener('change', (e) => {
@@ -1158,6 +1226,7 @@
     get settings() { return settings; },
     get tasks() { return tasks; },
     get lists() { return lists; },
+    listLabel,
     // Add a task built elsewhere (voice input)
     addTask(fields) {
       const list = fields.listName ? ensureList(fields.listName) : null;
